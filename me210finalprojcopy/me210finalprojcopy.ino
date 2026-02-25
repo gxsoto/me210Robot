@@ -1,19 +1,36 @@
+//PINS ASSUMING AN ARDUINO MEGA: https://docs.arduino.cc/resources/pinouts/A000067-full-pinout.pdf 
+
 // l289n motor driver "in#" to digital pins
-uint8_t motor1in1 = 13;
-uint8_t motor1in2 = 12;
-uint8_t motor2in3 = 8;
-uint8_t motor2in4 = 7;
+uint8_t motor1in1 = 9;
+uint8_t motor1in2 = 8;
+uint8_t motor2in3 = 10;
+uint8_t motor2in4 = 11;
 
 // l289n motor driver "enable" to digital pwm pins
-uint8_t pwmMotor1 = 11;
-uint8_t pwmMotor2 = 10;
+uint8_t pwmMotor1 = 13;
+uint8_t pwmMotor2 = 12;
 
-uint8_t backSensorTrig = 4;
-uint8_t backSensorEcho = 5;
+// both ultrasonic sesnors
+uint8_t backSensorTrig = 7;
+uint8_t backSensorEcho = 6;
 
-uint8_t rightSensorTrig = 2;
-uint8_t rightSensorEcho = 3;
+uint8_t rightSensorTrig = 5;
+uint8_t rightSensorEcho = 4;
 
+// all 4 ir sensors, one analog one digital per sensor
+uint8_t ir1digital = 54;
+uint8_t ir1analog = A1; //digital 55
+
+unit8_t ir2digital = 56
+uint8_t ir2analog = A3;
+
+unit8_t ir3digital = 58
+uint8_t ir3analog = A5;
+
+uint8_t ir4digital = 60
+uint8_t ir4analog = A7;
+
+// pins needed for the servo that controls the puck gate
 
 typedef enum { // defining states
 ORIENTING, ESCAPE, FOLLOW_LINE, RELOAD, START_PUCK_RELEASE, DROP_PUCKS,
@@ -85,6 +102,10 @@ float readUltrasonicSensor(uint8_t trig, uint8_t echo){
   Serial.println(" cm");
 
   return distance;
+}
+
+void readIRSensor(){
+
 }
 
 
