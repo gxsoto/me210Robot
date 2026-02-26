@@ -61,6 +61,17 @@ void setup() {
   pinMode(rightSesnortrig, OUTPUT);
   pinMode(rightSensorEcho, INPUT);
 
+  //setup the digital pins for the ir
+  pinMode(ir1digital, OUTPUT);
+  pinMode(ir2digital, OUTPUT);
+  pinMode(ir3digital, OUTPUT);
+  pinMode(ir4digital, OUTPUT);
+
+  //setup analog pins for irs
+  pinMode(ir1analog, INPUT);
+  pinMode(ir2analog, INPUT);
+  pinMode(ir3analog, INPUT);
+  pinMode(ir4analog, INPUT);
 
   // once power switches on, we are immediately going to start orienting
   currState = ORIENTING; 
@@ -104,12 +115,21 @@ float readUltrasonicSensor(uint8_t trig, uint8_t echo){
   return distance;
 }
 
-void readIRSensor(){
+uint8_t readIRSensor(uint8_t analog, uint8_t digital){
+  digitalWrite(digital, HIGH);
+  delayMicroseconds(500);
+  int withLight = analogRead(analog);
 
+  digitalWrite(digital, LOW);
+  delayMicroseconds(500);
+  int noLight = analogRead(analog);
+
+  return max(0, withLight - noLight);
 }
 
 
 void loop() {
   // put your main code here, to run repeatedly:
+  // readUltrasonicSensor(); 
 
 }
