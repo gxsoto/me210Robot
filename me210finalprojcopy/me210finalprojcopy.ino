@@ -32,8 +32,8 @@ uint8_t ir4digital = 60;
 uint8_t ir4analog = A7;
 
 // thresholds - tune these during testing
-float rightUSThresh = 8.5;
-float backUSThresh = 35.0;
+float right_orienting_thresh = 8.5;
+float back_orienting_thresh = 35.0;
 uint8_t irLineThresh = 50; // IR reading BELOW this means on the line (line absorbs IR)
 
 uint8_t slowMotorSpeed = 120; // for ALIGN_TO_LINE, tune during testing
@@ -41,6 +41,17 @@ uint8_t slowMotorSpeed = 120; // for ALIGN_TO_LINE, tune during testing
 typedef enum {
   ORIENTING, MOVE_TO_LINE, ALIGN_TO_LINE, LINE_FOLLOWING,
   RELEASE_PUCK, BACKUP_TO_WALL, ORIENT_TO_ENTER_BOX, ENTER_BOX
+
+// ORIENTING -> rotate left until right and back ultrasonic sensor values are within a certain threshold
+// MOVE_TO_LINE -> move forward until you detect line on the front
+// ALIGN_TO_LINE -> take a non-sharp turn (one motor slower than other) left until you detect line on the front
+// LINE_FOLLOWING -> line following until outer left and right IR line sensors become 0 (detect black line)
+// RELEASE_PUCK -> release the servo motor for the pucks with a 2.5 second timer
+// BACKUP_TO_WALL -> line follow, but backwards, until your back ultrasonic sensor is within a certain threshold
+// ORIENT_TO_ENTER_BOX -> take a sharp turn right until right ultrasonic sensor is within a certain threshold value
+// ENTER_BOX -> move backwards until within a certain threshold for back ultrasonic sensor
+// loop back to ORIENTING state
+
 } States_t;
 
 States_t currState;
@@ -134,10 +145,6 @@ void readAllIR(uint8_t results[4]) {
   results[3] = readIRSensor(ir4analog, ir4digital); // front left
 }
 
-bool onLine(uint8_t irVal) {
-  return irVal < irLineThresh;
-}
-
 // ---- state handlers ----
 
 void handleOrienting(void) {
@@ -149,10 +156,12 @@ void handleOrienting(void) {
   float rightDist = readUltrasonicSensor(rightSensorTrig, rightSensorEcho);
   float backDist  = readUltrasonicSensor(backSensorTrig, backSensorEcho);
 
-  Serial.print("ORIENTING | right: "); Serial.print(rightDist);
-  Serial.print(" back: "); Serial.println(backDist);
+  Serial.print("ORIENTING | right: "); 
+  Serial.print(rightDist);
+  Serial.print(" back: "); 
+  Serial.println(backDist);
 
-  if (rightDist <= rightUSThresh && backDist <= backUSThresh) {
+  if (rightDist <= right_orienting_thresh && backDist <= back_orienting_thresh) {
     stopMotors();
     Serial.println("-> MOVE_TO_LINE");
     currState = MOVE_TO_LINE;
@@ -169,10 +178,14 @@ void handleMoveToLine(void) {
   readAllIR(ir);
 
   Serial.print("MOVE_TO_LINE | ir: ");
-  for (int i = 0; i < 4; i++) { Serial.print(ir[i]); Serial.print(" "); }
+  for (int i = 0; i < 4; i++) { 
+    Serial.print(ir[i]); 
+    Serial.print(" "); 
+  }
   Serial.println();
 
-  if (onLine(ir[0]) || onLine(ir[1]) || onLine(ir[2]) || onLine(ir[3])) {
+  if (ir[1] == 0 && ir[2] == 0) { // both of the center ir line sensors detect
+    // the black line, assuming both sensors are placed closed enough
     stopMotors();
     Serial.println("-> ALIGN_TO_LINE");
     currState = ALIGN_TO_LINE;
@@ -234,9 +247,15 @@ void setup() {
 
 void loop() {
   switch (currState) {
-    case ORIENTING:      handleOrienting();    break;
-    case MOVE_TO_LINE:   handleMoveToLine();   break;
-    case ALIGN_TO_LINE:  handleAlignToLine();  break;
+    case ORIENTING:      
+      handleOrienting();    
+      break;
+    case MOVE_TO_LINE:   
+      handleMoveToLine();   
+      break;
+    case ALIGN_TO_LINE:  
+      handleAlignToLine();  
+      break;
     case LINE_FOLLOWING:
     case RELEASE_PUCK:
     case BACKUP_TO_WALL:
