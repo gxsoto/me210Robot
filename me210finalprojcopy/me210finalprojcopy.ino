@@ -1,5 +1,7 @@
 //PINS ASSUMING AN ARDUINO MEGA: https://docs.arduino.cc/resources/pinouts/A000067-full-pinout.pdf 
 
+#include <Servo.h> // library for the servo motor
+
 // l298n motor driver "in#" to digital pins
 uint8_t motor1in1 = 22; // left motor
 uint8_t motor1in2 = 24;
@@ -9,6 +11,12 @@ uint8_t motor2in4 = 26;
 // l298n motor driver "enable" to digital pwm pins
 uint8_t pwmMotor1 = 7;
 uint8_t pwmMotor2 = 8;
+
+// servo motor: -
+Servo puckServo;
+uint8_t servoPin = 9;
+uint8_t servoClosedAngle = 90; // starting position, tune during testing
+uint8_t servoOpenAngle = 0; // 90 degrees anticlockwise from closed, tune during testing
 
 // both ultrasonic sensors
 uint8_t backSensorTrig = 52;
@@ -112,6 +120,8 @@ void slowTurnLeft() {
   digitalWrite(motor2in3, HIGH);
   digitalWrite(motor2in4, LOW);
 }
+
+
 
 // ---- sensor helpers ----
 
@@ -258,6 +268,17 @@ void handleLineFollowing(void) {
   analogWrite(pwmMotor2, rightSpeed); // adjust to rightSpeed
 }
 
+void handleReleasePuck(void) {
+  if (prev_state != RELEASE_PUCK) {
+    prev_state = RELEASE_PUCK;
+    puckServo.write(servoOpenAngle); // rotate 90 degrees anticlockwise
+    delay(3000);                     // hold for 3 seconds
+    puckServo.write(servoClosedAngle); // return to closed position
+    Serial.println("-> BACKUP_TO_WALL");
+    currState = BACKUP_TO_WALL;
+  }
+}
+
 // ---- setup ----
 
 void setup() {
@@ -285,6 +306,10 @@ void setup() {
   pinMode(ir3analog, INPUT);
   pinMode(ir4analog, INPUT);
 
+  // for servo motor: -
+  puckServo.attach(servoPin);
+  puckServo.write(servoClosedAngle); // initialize to closed position
+
   currState = ORIENTING;
   prev_state = ENTER_BOX; // deliberately different so first state entry always triggers motor setup
 }
@@ -306,6 +331,8 @@ void loop() {
       handleLineFollowing();
       break;
     case RELEASE_PUCK:
+      handleReleasePuck();
+      break;
     case BACKUP_TO_WALL:
     case ORIENT_TO_ENTER_BOX:
     case ENTER_BOX:
