@@ -11,23 +11,23 @@ uint8_t pwmMotor1 = 13;
 uint8_t pwmMotor2 = 12;
 
 // both ultrasonic sesnors
-uint8_t backSensorTrig = 7;
-uint8_t backSensorEcho = 6;
+uint8_t backSensorTrig = 52;
+uint8_t backSensorEcho = 50;
 
-uint8_t rightSensorTrig = 5;
-uint8_t rightSensorEcho = 4;
+uint8_t rightSensorTrig = 53;
+uint8_t rightSensorEcho = 51;
 
 // all 4 ir sensors, one analog one digital per sensor
-uint8_t ir1digital = 54;
-uint8_t ir1analog = A1; //digital 55
+uint8_t ir1digital = 48;
+uint8_t ir1analog = A0; //digital 55
 
-unit8_t ir2digital = 56
+uint8_t ir2digital = 56;
 uint8_t ir2analog = A3;
 
-unit8_t ir3digital = 58
+uint8_t ir3digital = 58;
 uint8_t ir3analog = A5;
 
-uint8_t ir4digital = 60
+uint8_t ir4digital = 60;
 uint8_t ir4analog = A7;
 
 // pins needed for the servo that controls the puck gate
@@ -55,10 +55,10 @@ void setup() {
   pinMode(pwmMotor2, OUTPUT);
 
   //set up the back and right sesnors
-  pinMode(backSesnorTrig, OUTPUT);
+  pinMode(backSensorTrig, OUTPUT);
   pinMode(backSensorEcho, INPUT);
 
-  pinMode(rightSesnortrig, OUTPUT);
+  pinMode(rightSensorTrig, OUTPUT);
   pinMode(rightSensorEcho, INPUT);
 
   //setup the digital pins for the ir
@@ -103,14 +103,14 @@ float readUltrasonicSensor(uint8_t trig, uint8_t echo){
   digitalWrite(trig, LOW);
 
   // Read echo time
-  duration = pulseIn(echo, HIGH);
+  duration = pulseIn(echo, HIGH, 38000);
 
   // Convert to distance
   distance = duration * 0.0343 / 2;
 
-  Serial.print("Distance: ");
-  Serial.print(distance);
-  Serial.println(" cm");
+  // Serial.print("Distance: ");
+  // Serial.print(distance);
+  // Serial.println(" cm");
 
   return distance;
 }
@@ -130,6 +130,25 @@ uint8_t readIRSensor(uint8_t analog, uint8_t digital){
 
 void loop() {
   // put your main code here, to run repeatedly:
-  // readUltrasonicSensor(); 
+  // readUltrasonicSensor();
+
+  //8.5 cm as right threshold , more sensitive
+  // less than 35 for back , more flexible 
+  // ir sensor must be 0
+
+
+  // float dis = readUltrasonicSensor(rightSensorTrig, rightSensorEcho);
+  // Serial.print("Distance right: ");
+  // Serial.print(dis);
+  // Serial.println(" cm");
+
+  // float disB = readUltrasonicSensor(backSensorTrig, backSensorEcho);
+  // Serial.print("Distance back: ");
+  // Serial.print(disB);
+  // Serial.println(" cm");
+
+
+  // uint8_t ir = readIRSensor(ir1analog, ir1digital);
+  // Serial.println(ir);
 
 }
