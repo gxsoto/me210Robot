@@ -1,14 +1,14 @@
 //PINS ASSUMING AN ARDUINO MEGA: https://docs.arduino.cc/resources/pinouts/A000067-full-pinout.pdf 
 
 // l289n motor driver "in#" to digital pins
-uint8_t motor1in1 = 9;
-uint8_t motor1in2 = 8;
-uint8_t motor2in3 = 10;
-uint8_t motor2in4 = 11;
+uint8_t motor1in1 = 22;
+uint8_t motor1in2 = 24;
+uint8_t motor2in3 = 28;
+uint8_t motor2in4 = 26;
 
 // l289n motor driver "enable" to digital pwm pins
-uint8_t pwmMotor1 = 13;
-uint8_t pwmMotor2 = 12;
+uint8_t pwmMotor1 = 7;
+uint8_t pwmMotor2 = 8;
 
 // both ultrasonic sesnors
 uint8_t backSensorTrig = 52;
@@ -127,6 +127,21 @@ uint8_t readIRSensor(uint8_t analog, uint8_t digital){
   return max(0, withLight - noLight);
 }
 
+void turnLeft(uint8_t lPin1, uint8_t lPin2, uint8_t lEnable,
+              uint8_t rPin1, uint8_t rPin2, uint8_t rEnable) {
+  // Left wheel backward, right wheel forward
+  digitalWrite(lPin1, LOW);
+  digitalWrite(lPin2, HIGH);
+  analogWrite(lEnable, 255);
+
+  digitalWrite(rPin1, HIGH);
+  digitalWrite(rPin2, LOW);
+  analogWrite(rEnable, 255);
+}
+
+float rightUSThresh = 8.5;
+float backUSThres = 35.0;
+
 
 void loop() {
   // put your main code here, to run repeatedly:
@@ -135,6 +150,16 @@ void loop() {
   //8.5 cm as right threshold , more sensitive
   // less than 35 for back , more flexible 
   // ir sensor must be 0
+
+  motorFoward(motor1in1, motor1in2, pwmMotor1);
+  // if (currState == ORIENTING){
+  //   float currRightUS = readUltrasonicSensor(rightSensorTrig, rightSensorEcho);
+  //   float currBackUS = readUltrasonicSensor(backSensorTrig, backSensorEcho);
+  //   while (currRightUS > rightUSThresh && currBackUS > currBackUS) {
+  //     // if we are too far from the back and too far from the right, we must keep turning 
+  //     turnLeft(motor1in1, motor1in2, pwmMotor1, motor2in3, motor2in4, pwmMotor2);
+  //   }
+  // }
 
 
   // float dis = readUltrasonicSensor(rightSensorTrig, rightSensorEcho);
