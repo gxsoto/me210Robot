@@ -34,7 +34,7 @@ uint8_t ir4analog = A7;
 // thresholds - tune these during testing
 float rightUSThresh = 8.5;
 float backUSThresh = 35.0;
-uint8_t irLineThresh = 50; // if IR reading is above this, line is detected
+uint8_t irLineThresh = 50; // IR reading BELOW this means on the line (line absorbs IR)
 
 uint8_t slowMotorSpeed = 120; // for ALIGN_TO_LINE, tune during testing
 
@@ -44,6 +44,8 @@ typedef enum {
 } States_t;
 
 States_t currState;
+States_t prev_state; // keep track of previous state to prevent motor
+                     // from updating values at each loop iteration
 
 // ---- motor helpers ----
 
@@ -81,18 +83,15 @@ void stopMotors() {
 }
 
 void turnLeft() {
-  // left motor backward, right motor forward
   motorBackward(motor1in1, motor1in2, pwmMotor1);
   motorForward(motor2in3, motor2in4, pwmMotor2);
 }
 
 void turnRight() {
-  // left motor forward, right motor backward
   motorForward(motor1in1, motor1in2, pwmMotor1);
   motorBackward(motor2in3, motor2in4, pwmMotor2);
 }
 
-// gentle left curve: right motor full, left motor slow
 void slowTurnLeft() {
   analogWrite(pwmMotor1, slowMotorSpeed);
   digitalWrite(motor1in1, HIGH);
@@ -128,7 +127,6 @@ uint8_t readIRSensor(uint8_t analog, uint8_t digital) {
   return max(0, withLight - noLight);
 }
 
-// reads all 4 IR sensors into an array: [ir1, ir2, ir3, ir4]
 void readAllIR(uint8_t results[4]) {
   results[0] = readIRSensor(ir1analog, ir1digital); // front right
   results[1] = readIRSensor(ir2analog, ir2digital); // front center-right
@@ -136,9 +134,18 @@ void readAllIR(uint8_t results[4]) {
   results[3] = readIRSensor(ir4analog, ir4digital); // front left
 }
 
+bool onLine(uint8_t irVal) {
+  return irVal < irLineThresh;
+}
+
 // ---- state handlers ----
 
-void handleOrienting() {
+void handleOrienting(void) {
+  if (prev_state != ORIENTING) {
+    turnLeft(); // set motors once on state entry
+    prev_state = ORIENTING;
+  }
+
   float rightDist = readUltrasonicSensor(rightSensorTrig, rightSensorEcho);
   float backDist  = readUltrasonicSensor(backSensorTrig, backSensorEcho);
 
@@ -149,12 +156,15 @@ void handleOrienting() {
     stopMotors();
     Serial.println("-> MOVE_TO_LINE");
     currState = MOVE_TO_LINE;
-  } else {
-    turnLeft();
   }
 }
 
-void handleMoveToLine() {
+void handleMoveToLine(void) {
+  if (prev_state != MOVE_TO_LINE) {
+    moveForward(); // set motors once on state entry
+    prev_state = MOVE_TO_LINE;
+  }
+
   uint8_t ir[4];
   readAllIR(ir);
 
@@ -162,17 +172,19 @@ void handleMoveToLine() {
   for (int i = 0; i < 4; i++) { Serial.print(ir[i]); Serial.print(" "); }
   Serial.println();
 
-  // any IR sensor detects line -> go to ALIGN_TO_LINE
-  if (ir[0] > irLineThresh || ir[1] > irLineThresh || ir[2] > irLineThresh || ir[3] > irLineThresh) {
+  if (onLine(ir[0]) || onLine(ir[1]) || onLine(ir[2]) || onLine(ir[3])) {
     stopMotors();
     Serial.println("-> ALIGN_TO_LINE");
     currState = ALIGN_TO_LINE;
-  } else {
-    moveForward();
   }
 }
 
-void handleAlignToLine() {
+void handleAlignToLine(void) {
+  if (prev_state != ALIGN_TO_LINE) {
+    slowTurnLeft(); // set motors once on state entry
+    prev_state = ALIGN_TO_LINE;
+  }
+
   uint8_t ir[4];
   readAllIR(ir);
 
@@ -180,13 +192,10 @@ void handleAlignToLine() {
   for (int i = 0; i < 4; i++) { Serial.print(ir[i]); Serial.print(" "); }
   Serial.println();
 
-  // aligned when all 4 sensors detect the line
-  if (ir[0] > irLineThresh && ir[1] > irLineThresh && ir[2] > irLineThresh && ir[3] > irLineThresh) {
+  if (ir[1] == 0 && ir[2] == 0) {
     stopMotors();
     Serial.println("-> LINE_FOLLOWING");
     currState = LINE_FOLLOWING;
-  } else {
-    slowTurnLeft();
   }
 }
 
@@ -218,13 +227,25 @@ void setup() {
   pinMode(ir4analog, INPUT);
 
   currState = ORIENTING;
+  prev_state = ENTER_BOX; // deliberately different so first state entry always triggers motor setup
 }
 
 // ---- loop ----
 
 void loop() {
-  if (currState == ORIENTING)      handleOrienting();
-  else if (currState == MOVE_TO_LINE)   handleMoveToLine();
-  else if (currState == ALIGN_TO_LINE)  handleAlignToLine();
-  // remaining states to be implemented
+  switch (currState) {
+    case ORIENTING:      handleOrienting();    break;
+    case MOVE_TO_LINE:   handleMoveToLine();   break;
+    case ALIGN_TO_LINE:  handleAlignToLine();  break;
+    case LINE_FOLLOWING:
+    case RELEASE_PUCK:
+    case BACKUP_TO_WALL:
+    case ORIENT_TO_ENTER_BOX:
+    case ENTER_BOX:
+      // to be implemented
+      break;
+    default:
+      Serial.println("Unknown state — should never get here");
+      break;
+  }
 }
