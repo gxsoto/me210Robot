@@ -18,7 +18,7 @@ uint8_t rightSensorTrig = 53;
 uint8_t rightSensorEcho = 51;
 
 // all 4 ir sensors, one analog one digital per sensor
-// facing the bot: ir1 = front right, ir2 = front center-right, ir3 = front center-left, ir4 = front left
+// direction when facing the bot: ir1 = front right, ir2 = front center-right, ir3 = front center-left, ir4 = front left
 uint8_t ir1digital = 48;
 uint8_t ir1analog = A0;
 
@@ -34,7 +34,6 @@ uint8_t ir4analog = A7;
 // thresholds - tune these during testing
 float right_orienting_thresh = 8.5;
 float back_orienting_thresh = 35.0;
-uint8_t irLineThresh = 50; // IR reading BELOW this means on the line (line absorbs IR)
 
 uint8_t slowMotorSpeed = 120; // for ALIGN_TO_LINE, tune during testing
 
@@ -50,6 +49,7 @@ typedef enum {
 // BACKUP_TO_WALL -> line follow, but backwards, until your back ultrasonic sensor is within a certain threshold
 // ORIENT_TO_ENTER_BOX -> take a sharp turn right until right ultrasonic sensor is within a certain threshold value
 // ENTER_BOX -> move backwards until within a certain threshold for back ultrasonic sensor
+// WAIT_FOR_RELOAD -> wait 3 seconds in the same spot to allow us to reload the pucks before going to ORIENTING again
 // loop back to ORIENTING state
 
 } States_t;
@@ -63,13 +63,13 @@ States_t prev_state; // keep track of previous state to prevent motor
 void motorForward(uint8_t pin1, uint8_t pin2, uint8_t enable) {
   digitalWrite(pin1, HIGH);
   digitalWrite(pin2, LOW);
-  analogWrite(enable, 255);
+  analogWrite(enable, 180);
 }
 
 void motorBackward(uint8_t pin1, uint8_t pin2, uint8_t enable) {
   digitalWrite(pin1, LOW);
   digitalWrite(pin2, HIGH);
-  analogWrite(enable, 255);
+  analogWrite(enable, 180);
 }
 
 void motorStop(uint8_t pin1, uint8_t pin2, uint8_t enable) {
@@ -108,7 +108,7 @@ void slowTurnLeft() {
   digitalWrite(motor1in1, HIGH);
   digitalWrite(motor1in2, LOW);
 
-  analogWrite(pwmMotor2, 255);
+  analogWrite(pwmMotor2, 180);
   digitalWrite(motor2in3, HIGH);
   digitalWrite(motor2in4, LOW);
 }
@@ -128,11 +128,11 @@ float readUltrasonicSensor(uint8_t trig, uint8_t echo) {
 
 uint8_t readIRSensor(uint8_t analog, uint8_t digital) {
   digitalWrite(digital, HIGH);
-  delayMicroseconds(500);
+  delayMicroseconds(500); // try reducing this slightly later to increase speed of bot if needed
   int withLight = analogRead(analog);
 
   digitalWrite(digital, LOW);
-  delayMicroseconds(500);
+  delayMicroseconds(500); // try reducing this slightly later to increase speed of bot if needed
   int noLight = analogRead(analog);
 
   return max(0, withLight - noLight);
@@ -202,7 +202,9 @@ void handleAlignToLine(void) {
   readAllIR(ir);
 
   Serial.print("ALIGN_TO_LINE | ir: ");
-  for (int i = 0; i < 4; i++) { Serial.print(ir[i]); Serial.print(" "); }
+  for (int i = 0; i < 4; i++) { 
+    Serial.print(ir[i]); Serial.print(" "); 
+  }
   Serial.println();
 
   if (ir[1] == 0 && ir[2] == 0) {
@@ -210,6 +212,50 @@ void handleAlignToLine(void) {
     Serial.println("-> LINE_FOLLOWING");
     currState = LINE_FOLLOWING;
   }
+}
+
+int Kp = 50; // tune during testing - keeping it int instead of int8_t or uint8_t to avoid overflowing
+uint8_t baseSpeed = 150; // tune during testing
+
+void handleLineFollowing(void) {
+  if (prev_state != LINE_FOLLOWING) {
+    prev_state = LINE_FOLLOWING;
+    // no motor set here since P control handles it dynamically every iteration
+  }
+
+  uint8_t ir[4];
+  readAllIR(ir);
+
+  Serial.print("LINE_FOLLOWING | ir: ");
+  for (int i = 0; i < 4; i++) { 
+    Serial.print(ir[i]); 
+    Serial.print(" "); 
+  }
+  Serial.println();
+
+  // exit condition: outer sensors detect black line
+  if (ir[0] == 0 && ir[3] == 0) {
+    stopMotors();
+    Serial.println("-> RELEASE_PUCK");
+    currState = RELEASE_PUCK;
+    return;
+  }
+
+  // error: negative = drifting right, positive = drifting left
+  int error = (int)ir[2] - (int)ir[1];
+  int correction = (int)(Kp * error);
+
+  int leftSpeed  = constrain(baseSpeed + correction, 0, 180);
+  int rightSpeed = constrain(baseSpeed - correction, 0, 180);
+
+  // apply speeds
+  digitalWrite(motor1in1, HIGH);
+  digitalWrite(motor1in2, LOW);
+  analogWrite(pwmMotor1, leftSpeed); // adjust to leftSpeed
+
+  digitalWrite(motor2in3, HIGH);
+  digitalWrite(motor2in4, LOW);
+  analogWrite(pwmMotor2, rightSpeed); // adjust to rightSpeed
 }
 
 // ---- setup ----
@@ -257,12 +303,16 @@ void loop() {
       handleAlignToLine();  
       break;
     case LINE_FOLLOWING:
+      handleLineFollowing();
+      break;
     case RELEASE_PUCK:
     case BACKUP_TO_WALL:
     case ORIENT_TO_ENTER_BOX:
     case ENTER_BOX:
       // to be implemented
       break;
+    case WAIT_FOR_RELOAD: 
+
     default:
       Serial.println("Unknown state — should never get here");
       break;
