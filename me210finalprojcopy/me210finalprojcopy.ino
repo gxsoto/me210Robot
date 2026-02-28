@@ -136,16 +136,8 @@ float readUltrasonicSensor(uint8_t trig, uint8_t echo) {
   return duration * 0.0343 / 2;
 }
 
-uint8_t readIRSensor(uint8_t analog, uint8_t digital) {
-  digitalWrite(digital, HIGH);
-  delayMicroseconds(500); // try reducing this slightly later to increase speed of bot if needed
-  int withLight = analogRead(analog);
-
-  digitalWrite(digital, LOW);
-  delayMicroseconds(500); // try reducing this slightly later to increase speed of bot if needed
-  int noLight = analogRead(analog);
-
-  return max(0, withLight - noLight);
+uint8_t readIRSensor(uint8_t analog) {
+  return analogRead(analog); 
 }
 
 void readAllIR(uint8_t results[4]) {
