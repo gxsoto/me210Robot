@@ -27,27 +27,28 @@ uint8_t rightSensorEcho = 51;
 
 // all 4 ir sensors, one analog one digital per sensor
 // direction when facing the bot: ir1 = front right, ir2 = front center-right, ir3 = front center-left, ir4 = front left
-uint8_t ir1digital = 48;
 uint8_t ir1analog = A0;
-
-uint8_t ir2digital = 56;
 uint8_t ir2analog = A3;
-
-uint8_t ir3digital = 58;
 uint8_t ir3analog = A5;
-
-uint8_t ir4digital = 60;
 uint8_t ir4analog = A7;
 
 // thresholds - tune these during testing
 float right_orienting_thresh = 8.5;
 float back_orienting_thresh = 35.0;
+float back_orienting_thresh_BackingToWall = 28.0; // to be tuned
+float right_enter_box_thresh = 8.5; // to be tuned
+float back_enter_box_thresh = 10.0; // to be tuned
+
+float lineSensor_thresh = 500.0; // to be tuned
 
 uint8_t slowMotorSpeed = 120; // for ALIGN_TO_LINE, tune during testing
 
+unsigned long startTime;
+const unsigned long competitionDuration = 120000; // 2 minutes in milliseconds
+
 typedef enum {
   ORIENTING, MOVE_TO_LINE, ALIGN_TO_LINE, LINE_FOLLOWING,
-  RELEASE_PUCK, BACKUP_TO_WALL, ORIENT_TO_ENTER_BOX, ENTER_BOX
+  RELEASE_PUCK, BACKUP_TO_WALL, ORIENT_TO_ENTER_BOX, ENTER_BOX, WAIT_FOR_RELOAD
 
 // ORIENTING -> rotate left until right and back ultrasonic sensor values are within a certain threshold
 // MOVE_TO_LINE -> move forward until you detect line on the front
@@ -136,15 +137,15 @@ float readUltrasonicSensor(uint8_t trig, uint8_t echo) {
   return duration * 0.0343 / 2;
 }
 
-uint8_t readIRSensor(uint8_t analog) {
+int readIRSensor(uint8_t analog) {
   return analogRead(analog); 
 }
 
-void readAllIR(uint8_t results[4]) {
-  results[0] = readIRSensor(ir1analog, ir1digital); // front right
-  results[1] = readIRSensor(ir2analog, ir2digital); // front center-right
-  results[2] = readIRSensor(ir3analog, ir3digital); // front center-left
-  results[3] = readIRSensor(ir4analog, ir4digital); // front left
+void readAllIR(int results[4]) {
+  results[0] = readIRSensor(ir1analog); // front right
+  results[1] = readIRSensor(ir2analog); // front center-right
+  results[2] = readIRSensor(ir3analog); // front center-left
+  results[3] = readIRSensor(ir4analog); // front left
 }
 
 // ---- state handlers ----
@@ -176,7 +177,7 @@ void handleMoveToLine(void) {
     prev_state = MOVE_TO_LINE;
   }
 
-  uint8_t ir[4];
+  int ir[4];
   readAllIR(ir);
 
   Serial.print("MOVE_TO_LINE | ir: ");
@@ -186,7 +187,7 @@ void handleMoveToLine(void) {
   }
   Serial.println();
 
-  if (ir[1] == 0 && ir[2] == 0) { // both of the center ir line sensors detect
+  if (ir[1] < lineSensor_thresh || ir[2] < lineSensor_thresh) { // either of the center ir line sensors detect
     // the black line, assuming both sensors are placed closed enough
     stopMotors();
     Serial.println("-> ALIGN_TO_LINE");
@@ -200,7 +201,7 @@ void handleAlignToLine(void) {
     prev_state = ALIGN_TO_LINE;
   }
 
-  uint8_t ir[4];
+  int ir[4];
   readAllIR(ir);
 
   Serial.print("ALIGN_TO_LINE | ir: ");
@@ -209,14 +210,14 @@ void handleAlignToLine(void) {
   }
   Serial.println();
 
-  if (ir[1] == 0 && ir[2] == 0) {
+  if (ir[1] < lineSensor_thresh && ir[2] < lineSensor_thresh) {
     stopMotors();
     Serial.println("-> LINE_FOLLOWING");
     currState = LINE_FOLLOWING;
   }
 }
 
-int Kp = 50; // tune during testing - keeping it int instead of int8_t or uint8_t to avoid overflowing
+float Kp = 0.1; // tune during testing 
 uint8_t baseSpeed = 150; // tune during testing
 
 void handleLineFollowing(void) {
@@ -225,7 +226,7 @@ void handleLineFollowing(void) {
     // no motor set here since P control handles it dynamically every iteration
   }
 
-  uint8_t ir[4];
+  int ir[4];
   readAllIR(ir);
 
   Serial.print("LINE_FOLLOWING | ir: ");
@@ -235,8 +236,8 @@ void handleLineFollowing(void) {
   }
   Serial.println();
 
-  // exit condition: outer sensors detect black line
-  if (ir[0] == 0 && ir[3] == 0) {
+  // exit condition: both of the outer sensors detect black line
+  if (ir[0] < lineSensor_thresh && ir[3] < lineSensor_thresh) { 
     stopMotors();
     Serial.println("-> RELEASE_PUCK");
     currState = RELEASE_PUCK;
@@ -244,7 +245,7 @@ void handleLineFollowing(void) {
   }
 
   // error: negative = drifting right, positive = drifting left
-  int error = (int)ir[2] - (int)ir[1];
+  int error = ir[2] - ir[1];
   int correction = (int)(Kp * error);
 
   int leftSpeed  = constrain(baseSpeed + correction, 0, 180);
@@ -271,6 +272,96 @@ void handleReleasePuck(void) {
   }
 }
 
+void handleBackupToWall(void) {
+  if (prev_state != BACKUP_TO_WALL) {
+    prev_state = BACKUP_TO_WALL;
+    // no motor set here since P control handles it dynamically every iteration
+  }
+
+  int ir[4];
+  readAllIR(ir);
+
+  Serial.print("BACKUP_TO_WALL | ir: ");
+  for (int i = 0; i < 4; i++) { 
+    Serial.print(ir[i]); 
+    Serial.print(" "); 
+  }
+  Serial.println();
+
+  float backDist = readUltrasonicSensor(backSensorTrig, backSensorEcho);
+  Serial.print(" back: "); 
+  Serial.println(backDist);
+
+  // exit condition: back ultrasonic within threshold
+  if (backDist <= back_orienting_thresh_BackingToWall) {
+    stopMotors();
+    Serial.println("-> ORIENT_TO_ENTER_BOX");
+    currState = ORIENT_TO_ENTER_BOX;
+    return;
+  }
+
+  // error flipped compared to LINE_FOLLOWING since we are moving backwards
+  int error = ir[1] - ir[2];
+  int correction = (int)(Kp * error);
+
+  int leftSpeed  = constrain(baseSpeed + correction, 0, 180);
+  int rightSpeed = constrain(baseSpeed - correction, 0, 180);
+
+  // apply speeds backwards
+  digitalWrite(motor1in1, LOW);
+  digitalWrite(motor1in2, HIGH);
+  analogWrite(pwmMotor1, leftSpeed);
+
+  digitalWrite(motor2in3, LOW);
+  digitalWrite(motor2in4, HIGH);
+  analogWrite(pwmMotor2, rightSpeed);
+}
+
+void handleOrientToEnterBox(void) {
+  if (prev_state != ORIENT_TO_ENTER_BOX) {
+    turnRight(); // set motors once on state entry
+    prev_state = ORIENT_TO_ENTER_BOX;
+  }
+
+  float rightDist = readUltrasonicSensor(rightSensorTrig, rightSensorEcho);
+
+  Serial.print("ORIENT_TO_ENTER_BOX | right: ");
+  Serial.println(rightDist);
+
+  if (rightDist <= right_enter_box_thresh) {
+    stopMotors();
+    Serial.println("-> ENTER_BOX");
+    currState = ENTER_BOX;
+  }
+}
+
+void handleEnterBox(void) {
+  if (prev_state != ENTER_BOX) {
+    moveBackward(); // set motors once on state entry
+    prev_state = ENTER_BOX;
+  }
+
+  float backDist = readUltrasonicSensor(backSensorTrig, backSensorEcho);
+
+  Serial.print("ENTER_BOX | back: ");
+  Serial.println(backDist);
+
+  if (backDist <= back_enter_box_thresh) {
+    stopMotors();
+    Serial.println("-> WAIT_FOR_RELOAD");
+    currState = WAIT_FOR_RELOAD;
+  }
+}
+
+void handleWaitForReload(void) {
+  if (prev_state != WAIT_FOR_RELOAD) {
+    prev_state = WAIT_FOR_RELOAD;
+    delay(3000); // wait for puck reload
+    Serial.println("-> ORIENTING");
+    currState = ORIENTING;
+  }
+}
+
 // ---- setup ----
 
 void setup() {
@@ -289,10 +380,6 @@ void setup() {
   pinMode(rightSensorTrig, OUTPUT);
   pinMode(rightSensorEcho, INPUT);
 
-  pinMode(ir1digital, OUTPUT);
-  pinMode(ir2digital, OUTPUT);
-  pinMode(ir3digital, OUTPUT);
-  pinMode(ir4digital, OUTPUT);
   pinMode(ir1analog, INPUT);
   pinMode(ir2analog, INPUT);
   pinMode(ir3analog, INPUT);
@@ -302,6 +389,8 @@ void setup() {
   puckServo.attach(servoPin);
   puckServo.write(servoClosedAngle); // initialize to closed position
 
+  startTime = millis(); // to keep track of competition time
+
   currState = ORIENTING;
   prev_state = ENTER_BOX; // deliberately different so first state entry always triggers motor setup
 }
@@ -309,6 +398,12 @@ void setup() {
 // ---- loop ----
 
 void loop() {
+  
+  if (millis() - startTime >= competitionDuration) {
+    stopMotors();
+    while (true); // stop forever
+  }
+
   switch (currState) {
     case ORIENTING:      
       handleOrienting();    
@@ -326,12 +421,17 @@ void loop() {
       handleReleasePuck();
       break;
     case BACKUP_TO_WALL:
+      handleBackupToWall();
+      break;
     case ORIENT_TO_ENTER_BOX:
+      handleOrientToEnterBox();
+      break;
     case ENTER_BOX:
-      // to be implemented
+      handleEnterBox();
       break;
     case WAIT_FOR_RELOAD: 
-
+      handleWaitForReload();
+      break;
     default:
       Serial.println("Unknown state — should never get here");
       break;
