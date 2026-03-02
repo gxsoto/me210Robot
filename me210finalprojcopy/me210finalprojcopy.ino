@@ -27,10 +27,10 @@ uint8_t rightSensorEcho = 51;
 
 // all 4 ir sensors, one analog one digital per sensor
 // direction when facing the bot: ir1 = front right, ir2 = front center-right, ir3 = front center-left, ir4 = front left
-uint8_t ir1analog = A0;
-uint8_t ir2analog = A3;
-uint8_t ir3analog = A5;
-uint8_t ir4analog = A7;
+uint8_t ir1analog = A0; // yellow wire
+uint8_t ir2analog = A1; // green wire
+uint8_t ir3analog = A2; // blue wire
+uint8_t ir4analog = A3; // purple wire
 
 // thresholds - tune these during testing
 float right_orienting_thresh = 8.5;
