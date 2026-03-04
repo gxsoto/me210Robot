@@ -56,7 +56,7 @@ typedef enum {
   RELEASE_PUCK, BACKUP_TO_WALL, ORIENT_TO_ENTER_BOX, ENTER_BOX, WAIT_FOR_RELOAD
 
 // ORIENTING -> rotate left until right and back ultrasonic sensor values are within a certain threshold
-// MOVE_TO_LINE -> move forward until you detect line on the front
+// MOVE_TO_LINE -> move forward until you are above certain threshold value for ultrasonic sensor
 // ALIGN_TO_LINE -> take a non-sharp turn (one motor slower than other) left until you detect line on the front
 // LINE_FOLLOWING -> line following until outer left and right IR line sensors become 0 (detect black line)
 // RELEASE_PUCK -> release the servo motor for the pucks with a 2.5 second timer
