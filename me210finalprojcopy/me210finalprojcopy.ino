@@ -19,18 +19,18 @@ uint8_t servoClosedAngle = 90; // starting position, tune during testing
 uint8_t servoOpenAngle = 0; // 90 degrees anticlockwise from closed, tune during testing
 
 // both ultrasonic sensors
-uint8_t backSensorTrig = 52;
-uint8_t backSensorEcho = 50;
+uint8_t backSensorTrig = 52; // green
+uint8_t backSensorEcho = 50; // purple
 
-uint8_t rightSensorTrig = 53;
-uint8_t rightSensorEcho = 51;
+uint8_t rightSensorTrig = 53; // white
+uint8_t rightSensorEcho = 51; // yellow
 
 // all 4 ir sensors, one analog one digital per sensor
 // direction when facing the bot: ir1 = front right, ir2 = front center-right, ir3 = front center-left, ir4 = front left
-uint8_t ir1analog = A0; // yellow wire
-uint8_t ir2analog = A1; // green wire
-uint8_t ir3analog = A2; // blue wire
-uint8_t ir4analog = A3; // purple wire
+#define ir1analog A3 // purple wire
+#define ir2analog A2 // blue wire
+#define ir3analog A1 // green wire
+#define ir4analog A0 // yellow wire
 
 // thresholds - tune these during testing
 float right_orienting_thresh = 8.5;
@@ -41,9 +41,11 @@ float back_enter_box_thresh = 10.0; // to be tuned
 
 float lineSensor_thresh = 500.0; // to be tuned
 
-uint8_t slowMotorSpeed = 120; // for ALIGN_TO_LINE, tune during testing
+uint8_t slowMotorSpeed = 30; // for ALIGN_TO_LINE, tune during testing
 
 unsigned long startTime;
+unsigned long prevTime1; // TESTING
+unsigned long prevTime2; // TESTING
 const unsigned long competitionDuration = 120000; // 2 minutes in milliseconds
 
 typedef enum {
@@ -72,13 +74,13 @@ States_t prev_state; // keep track of previous state to prevent motor
 void motorForward(uint8_t pin1, uint8_t pin2, uint8_t enable) {
   digitalWrite(pin1, HIGH);
   digitalWrite(pin2, LOW);
-  analogWrite(enable, 180);
+  analogWrite(enable, 110);
 }
 
 void motorBackward(uint8_t pin1, uint8_t pin2, uint8_t enable) {
   digitalWrite(pin1, LOW);
   digitalWrite(pin2, HIGH);
-  analogWrite(enable, 180);
+  analogWrite(enable, 110);
 }
 
 void motorStop(uint8_t pin1, uint8_t pin2, uint8_t enable) {
@@ -113,11 +115,11 @@ void turnRight() {
 }
 
 void slowTurnLeft() {
-  analogWrite(pwmMotor1, slowMotorSpeed);
+  analogWrite(pwmMotor1, 90);
   digitalWrite(motor1in1, HIGH);
   digitalWrite(motor1in2, LOW);
 
-  analogWrite(pwmMotor2, 180);
+  analogWrite(pwmMotor2, 130);
   digitalWrite(motor2in3, HIGH);
   digitalWrite(motor2in4, LOW);
 }
@@ -137,15 +139,11 @@ float readUltrasonicSensor(uint8_t trig, uint8_t echo) {
   return duration * 0.0343 / 2;
 }
 
-int readIRSensor(uint8_t analog) {
-  return analogRead(analog); 
-}
-
 void readAllIR(int results[4]) {
-  results[0] = readIRSensor(ir1analog); // front right
-  results[1] = readIRSensor(ir2analog); // front center-right
-  results[2] = readIRSensor(ir3analog); // front center-left
-  results[3] = readIRSensor(ir4analog); // front left
+  results[0] = analogRead(ir1analog); // front right
+  results[1] = analogRead(ir2analog); // front center-right
+  results[2] = analogRead(ir3analog); // front center-left
+  results[3] = analogRead(ir4analog); // front left
 }
 
 // ---- state handlers ----
@@ -159,14 +157,8 @@ void handleOrienting(void) {
   float rightDist = readUltrasonicSensor(rightSensorTrig, rightSensorEcho);
   float backDist  = readUltrasonicSensor(backSensorTrig, backSensorEcho);
 
-  Serial.print("ORIENTING | right: "); 
-  Serial.print(rightDist);
-  Serial.print(" back: "); 
-  Serial.println(backDist);
-
   if (rightDist <= right_orienting_thresh && backDist <= back_orienting_thresh) {
     stopMotors();
-    Serial.println("-> MOVE_TO_LINE");
     currState = MOVE_TO_LINE;
   }
 }
@@ -180,17 +172,9 @@ void handleMoveToLine(void) {
   int ir[4];
   readAllIR(ir);
 
-  Serial.print("MOVE_TO_LINE | ir: ");
-  for (int i = 0; i < 4; i++) { 
-    Serial.print(ir[i]); 
-    Serial.print(" "); 
-  }
-  Serial.println();
-
   if (ir[1] < lineSensor_thresh || ir[2] < lineSensor_thresh) { // either of the center ir line sensors detect
     // the black line, assuming both sensors are placed closed enough
     stopMotors();
-    Serial.println("-> ALIGN_TO_LINE");
     currState = ALIGN_TO_LINE;
   }
 }
@@ -204,21 +188,14 @@ void handleAlignToLine(void) {
   int ir[4];
   readAllIR(ir);
 
-  Serial.print("ALIGN_TO_LINE | ir: ");
-  for (int i = 0; i < 4; i++) { 
-    Serial.print(ir[i]); Serial.print(" "); 
-  }
-  Serial.println();
-
-  if (ir[1] < lineSensor_thresh && ir[2] < lineSensor_thresh) {
+  if (ir[1] > 100 || ir[2] > 100) {
     stopMotors();
-    Serial.println("-> LINE_FOLLOWING");
     currState = LINE_FOLLOWING;
   }
 }
 
 float Kp = 0.1; // tune during testing 
-uint8_t baseSpeed = 150; // tune during testing
+uint8_t baseSpeed = 110; // tune during testing 
 
 void handleLineFollowing(void) {
   if (prev_state != LINE_FOLLOWING) {
@@ -229,27 +206,19 @@ void handleLineFollowing(void) {
   int ir[4];
   readAllIR(ir);
 
-  Serial.print("LINE_FOLLOWING | ir: ");
-  for (int i = 0; i < 4; i++) { 
-    Serial.print(ir[i]); 
-    Serial.print(" "); 
-  }
-  Serial.println();
-
   // exit condition: both of the outer sensors detect black line
-  if (ir[0] < lineSensor_thresh && ir[3] < lineSensor_thresh) { 
+  if (ir[0] > 100 && ir[3] > 100) { 
     stopMotors();
-    Serial.println("-> RELEASE_PUCK");
     currState = RELEASE_PUCK;
     return;
   }
 
-  // error: negative = drifting right, positive = drifting left
+  // // error: negative = drifting right, positive = drifting left
   int error = ir[2] - ir[1];
   int correction = (int)(Kp * error);
 
-  int leftSpeed  = constrain(baseSpeed + correction, 0, 180);
-  int rightSpeed = constrain(baseSpeed - correction, 0, 180);
+  int leftSpeed  = constrain(baseSpeed + correction, 0, 255);
+  int rightSpeed = constrain(baseSpeed - correction, 0, 255);
 
   // apply speeds
   digitalWrite(motor1in1, HIGH);
@@ -259,6 +228,49 @@ void handleLineFollowing(void) {
   digitalWrite(motor2in3, HIGH);
   digitalWrite(motor2in4, LOW);
   analogWrite(pwmMotor2, rightSpeed); // adjust to rightSpeed
+
+  // printing every 1 second for debugging: -
+  // if (millis() - prevTime1 >= 300) {
+  //   Serial.print("ir[1]: ");
+  //   Serial.print(ir[1]);
+  //   Serial.print(" | ");
+
+  //   Serial.print("ir[2]: ");
+  //   Serial.println(ir[2]);
+
+  //   Serial.print("Error: ");
+  //   Serial.print(error);
+  //   Serial.print(" | ");
+
+  //   Serial.print("Correction: ");
+  //   Serial.print(correction); 
+  //   Serial.print(" | ");
+
+  //   Serial.print("Left speed: ");
+  //   Serial.println(leftSpeed);
+  //   Serial.print(" | ");
+
+  //   Serial.print("Right speed: ");
+  //   Serial.print(rightSpeed);
+  //   Serial.print(" | ");
+
+  //   Serial.print("Error: ");
+  //   Serial.print(error);
+  //   Serial.print(" | ");
+    
+  //   Serial.print("Correction: ");
+  //   Serial.print(correction);
+  //   Serial.print(" | ");
+    
+  //   Serial.print("Ir2: ");
+  //   Serial.print(ir[1]);
+  //   Serial.print(" | ");
+  //   Serial.print("Ir3: ");
+  //   Serial.print(ir[2]);
+  //   Serial.println(" | ");
+
+  // prevTime1 = millis(); // update value
+  // }
 }
 
 void handleReleasePuck(void) {
@@ -267,7 +279,6 @@ void handleReleasePuck(void) {
     puckServo.write(servoOpenAngle); // rotate 90 degrees anticlockwise
     delay(3000);                     // hold for 3 seconds
     puckServo.write(servoClosedAngle); // return to closed position
-    Serial.println("-> BACKUP_TO_WALL");
     currState = BACKUP_TO_WALL;
   }
 }
@@ -281,31 +292,22 @@ void handleBackupToWall(void) {
   int ir[4];
   readAllIR(ir);
 
-  Serial.print("BACKUP_TO_WALL | ir: ");
-  for (int i = 0; i < 4; i++) { 
-    Serial.print(ir[i]); 
-    Serial.print(" "); 
-  }
-  Serial.println();
-
   float backDist = readUltrasonicSensor(backSensorTrig, backSensorEcho);
-  Serial.print(" back: "); 
-  Serial.println(backDist);
 
   // exit condition: back ultrasonic within threshold
-  if (backDist <= back_orienting_thresh_BackingToWall) {
-    stopMotors();
-    Serial.println("-> ORIENT_TO_ENTER_BOX");
-    currState = ORIENT_TO_ENTER_BOX;
-    return;
-  }
+  // if (backDist <= back_orienting_thresh_BackingToWall) {
+  //   stopMotors();
+  //   currState = ORIENT_TO_ENTER_BOX;
+  //   return;
+  // }
 
   // error flipped compared to LINE_FOLLOWING since we are moving backwards
-  int error = ir[1] - ir[2];
+   int error = ir[1] - ir[2];
+  //int error = ir[2] - ir[1];
   int correction = (int)(Kp * error);
 
-  int leftSpeed  = constrain(baseSpeed + correction, 0, 180);
-  int rightSpeed = constrain(baseSpeed - correction, 0, 180);
+  int leftSpeed  = constrain(baseSpeed + correction, 0, 255);
+  int rightSpeed = constrain(baseSpeed - correction, 0, 255);
 
   // apply speeds backwards
   digitalWrite(motor1in1, LOW);
@@ -315,6 +317,50 @@ void handleBackupToWall(void) {
   digitalWrite(motor2in3, LOW);
   digitalWrite(motor2in4, HIGH);
   analogWrite(pwmMotor2, rightSpeed);
+
+
+  if (millis() - prevTime1 >= 300) {
+    // Serial.print("ir[1]: ");
+    // Serial.print(ir[1]);
+    // Serial.print(" | ");
+
+    // Serial.print("ir[2]: ");
+    // Serial.println(ir[2]);
+
+    // Serial.print("Error: ");
+    // Serial.print(error);
+    // Serial.print(" | ");
+
+    // Serial.print("Correction: ");
+    // Serial.print(correction); 
+    // Serial.print(" | ");
+
+    Serial.print("Left speed: ");
+    Serial.println(leftSpeed);
+    Serial.print(" | ");
+
+    Serial.print("Right speed: ");
+    Serial.print(rightSpeed);
+    Serial.print(" | ");
+
+    Serial.print("Error: ");
+    Serial.print(error);
+    Serial.print(" | ");
+    
+    Serial.print("Correction: ");
+    Serial.print(correction);
+    Serial.print(" | ");
+    
+    Serial.print("Ir2: ");
+    Serial.print(ir[1]);
+    Serial.print(" | ");
+    Serial.print("Ir3: ");
+    Serial.print(ir[2]);
+    Serial.println(" | ");
+
+    prevTime1 = millis(); // update value
+  }
+
 }
 
 void handleOrientToEnterBox(void) {
@@ -325,12 +371,8 @@ void handleOrientToEnterBox(void) {
 
   float rightDist = readUltrasonicSensor(rightSensorTrig, rightSensorEcho);
 
-  Serial.print("ORIENT_TO_ENTER_BOX | right: ");
-  Serial.println(rightDist);
-
   if (rightDist <= right_enter_box_thresh) {
     stopMotors();
-    Serial.println("-> ENTER_BOX");
     currState = ENTER_BOX;
   }
 }
@@ -343,12 +385,8 @@ void handleEnterBox(void) {
 
   float backDist = readUltrasonicSensor(backSensorTrig, backSensorEcho);
 
-  Serial.print("ENTER_BOX | back: ");
-  Serial.println(backDist);
-
   if (backDist <= back_enter_box_thresh) {
     stopMotors();
-    Serial.println("-> WAIT_FOR_RELOAD");
     currState = WAIT_FOR_RELOAD;
   }
 }
@@ -357,7 +395,6 @@ void handleWaitForReload(void) {
   if (prev_state != WAIT_FOR_RELOAD) {
     prev_state = WAIT_FOR_RELOAD;
     delay(3000); // wait for puck reload
-    Serial.println("-> ORIENTING");
     currState = ORIENTING;
   }
 }
@@ -366,7 +403,6 @@ void handleWaitForReload(void) {
 
 void setup() {
   Serial.begin(9600);
-  while (!Serial);
 
   pinMode(motor1in1, OUTPUT);
   pinMode(motor1in2, OUTPUT);
@@ -391,6 +427,9 @@ void setup() {
 
   startTime = millis(); // to keep track of competition time
 
+  prevTime1 = millis(); // TESTING
+  prevTime2 = millis(); // TESTING
+
   currState = ORIENTING;
   prev_state = ENTER_BOX; // deliberately different so first state entry always triggers motor setup
 }
@@ -403,6 +442,19 @@ void loop() {
     stopMotors();
     while (true); // stop forever
   }
+
+  // if (millis() - prevTime2 >= 1000) { // printing every 1 second
+  //   int ir_test[4];
+  //   readAllIR(ir_test); 
+
+    // int ir_test[4];
+    // readAllIR(ir_test);
+
+  //   prevTime2 = millis(); // update reading to print value every 1 second
+  // }
+
+  // float back_ultra = readUltrasonicSensor(backSensorTrig, backSensorEcho);
+  // float right_ultra = readUltrasonicSensor(rightSensorTrig, rightSensorEcho); 
 
   switch (currState) {
     case ORIENTING:      
