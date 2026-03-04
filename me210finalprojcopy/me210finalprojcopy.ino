@@ -35,13 +35,8 @@ uint8_t rightSensorEcho = 51; // yellow
 #define ir4analog A0 // yellow wire
 
 // thresholds - tune these during testing
-<<<<<<< HEAD
 float right_orienting_thresh = 23.0;
 float back_orienting_thresh = 34.0;
-=======
-float right_orienting_thresh = 13.0;
-float back_orienting_thresh = 40.0;
->>>>>>> dc9239564ed332f19a07054011f35a25b7fb3319
 float back_orienting_thresh_BackingToWall = 28.0; // to be tuned
 float right_enter_box_thresh = 8.5; // to be tuned
 float back_enter_box_thresh = 10.0; // to be tuned
@@ -82,21 +77,13 @@ States_t prev_state; // keep track of previous state to prevent motor
 void motorForward(uint8_t pin1, uint8_t pin2, uint8_t enable) {
   digitalWrite(pin1, HIGH);
   digitalWrite(pin2, LOW);
-<<<<<<< HEAD
   analogWrite(enable, 130);
-=======
-  analogWrite(enable, 150);
->>>>>>> dc9239564ed332f19a07054011f35a25b7fb3319
 }
 
 void motorBackward(uint8_t pin1, uint8_t pin2, uint8_t enable) {
   digitalWrite(pin1, LOW);
   digitalWrite(pin2, HIGH);
-<<<<<<< HEAD
   analogWrite(enable, 130);
-=======
-  analogWrite(enable, 150);
->>>>>>> dc9239564ed332f19a07054011f35a25b7fb3319
 }
 
 void motorStop(uint8_t pin1, uint8_t pin2, uint8_t enable) {
@@ -553,8 +540,3 @@ void loop() {
 //     //   Serial.println("Unknown state — should never get here");
 //     //   break;
     }
-<<<<<<< HEAD
-//}
-=======
-//}
->>>>>>> dc9239564ed332f19a07054011f35a25b7fb3319
